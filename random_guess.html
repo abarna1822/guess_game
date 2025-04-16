@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎯 Guess the Number</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet"/>
+  <!-- Confetti Library -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.4.0/dist/confetti.browser.min.js"></script>
+  <style>
+    body {
+      background-color: #f0f8ff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .game-container {
+      max-width: 500px;
+      width: 100%;
+      background: #fff;
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+    }
+    #userGuess {
+      max-width: 120px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container game-container text-center">
+    <h1 class="mb-4">🎯 Guess the Number</h1>
+    <div class="mb-3">
+      <span id="level" class="mr-3 font-weight-bold">Level: 1</span>
+      <span id="wins" class="mr-3">Wins: 0</span>
+      <span id="losses">Losses: 0</span>
+    </div>
+    <div id="timerContainer" class="mb-3">
+      <div id="timerText" class="font-weight-bold text-danger">Time left: 30 sec</div>
+      <div class="progress mt-1">
+        <div id="timerBar" class="progress-bar bg-danger" role="progressbar" style="width: 100%"></div>
+      </div>
+    </div>
+    <div class="mb-3">
+      <input type="number" id="userGuess" class="form-control d-inline mr-2" placeholder="Enter guess" />
+      <button id="guessButton" class="btn btn-primary">Guess</button>
+      <button id="hintButton" class="btn btn-info ml-2">Hint</button>
+    </div>
+    <div id="clue" class="mb-2 font-weight-bold text-info"></div>
+    <div id="result" class="mt-3"></div>
+    
+    <!-- Audio Elements for sound effects -->
+    <audio id="correctSound" src="https://www.soundjay.com/human/sounds/applause-8.mp3"></audio>
+    <audio id="wrongSound" src="https://www.soundjay.com/button/sounds/button-10.mp3"></audio>
+  </div>
+
+  <!-- Bootstrap & Popper JS -->
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  
+  <script>
+    // Game Variables
+    let level = 1;
+    let minNumber = 1;
+    let maxNumber = level * 100;
+    let secretNumber, attempts, timeLeft, timerInterval;
+    let wins = 0, losses = 0;
+
+    // DOM Elements
+    const userGuessInput = document.getElementById('userGuess');
+    const guessButton = document.getElementById('guessButton');
+    const hintButton = document.getElementById('hintButton');
+    const resultDiv = document.getElementById('result');
+    const clueDiv = document.getElementById('clue');
+    const timerText = document.getElementById('timerText');
+    const timerBar = document.getElementById('timerBar');
+    const levelSpan = document.getElementById('level');
+    const winsSpan = document.getElementById('wins');
+    const lossesSpan = document.getElementById('losses');
+    const correctSound = document.getElementById('correctSound');
+    const wrongSound = document.getElementById('wrongSound');
+
+    // Utility: Get non-trivial factors (excludes 1 and the number itself)
+    function getPossibleFactors(number) {
+      const factors = [];
+      for (let i = 1; i <= Math.sqrt(number); i++) {
+        if (number % i === 0) {
+          factors.push(i);
+          if (number / i !== i) {
+            factors.push(number / i);
+          }
+        }
+      }
+      return factors.filter(f => f !== 1 && f !== number).sort((a, b) => a - b);
+    }
+
+    // Utility: Generate random number between min & max (inclusive)
+    function getRandomNumber(min, max) {
+      return Math.floor(Math.random() * (max - min + 1) + min);
+    }
+
+    // Start a new round: Reset variables, update range based on level
+    function startNewRound() {
+      maxNumber = level * 100;
+      secretNumber = getRandomNumber(minNumber, maxNumber);
+      attempts = 0;
+      timeLeft = 30;
+      updateTimerDisplay();
+      
+      // Reset inputs, messages, and buttons
+      userGuessInput.disabled = false;
+      guessButton.disabled = false;
+      hintButton.disabled = false;
+      resultDiv.innerHTML = '';
+      clueDiv.innerHTML = '';
+      userGuessInput.value = '';
+      userGuessInput.focus();
+
+      // Clear previous timer and start countdown
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        updateTimerDisplay();
+        if (timeLeft <= 0) {
+          clearInterval(timerInterval);
+          timeUp();
+        }
+      }, 1000);
+    }
+
+    // Updates timer text and progress bar width
+    function updateTimerDisplay() {
+      timerText.innerHTML = `Time left: ${timeLeft} sec`;
+      const percentage = (timeLeft / 30) * 100;
+      timerBar.style.width = `${percentage}%`;
+    }
+
+    // When timer runs out
+    function timeUp() {
+      wrongSound.play();
+      losses++;
+      updateScoreboard();
+      resultDiv.innerHTML = `
+        ⏰ Time is up! The secret number was <strong>${secretNumber}</strong>.<br>
+        <button class="btn btn-success mt-3" onclick="startNewRound()">Next Round</button>
+      `;
+      disableInput();
+      clueDiv.innerHTML = '';
+    }
+
+    // Disable input and buttons
+    function disableInput() {
+      userGuessInput.disabled = true;
+      guessButton.disabled = true;
+      hintButton.disabled = true;
+    }
+
+    // Update scoreboard and level display
+    function updateScoreboard() {
+      winsSpan.innerHTML = `Wins: ${wins}`;
+      lossesSpan.innerHTML = `Losses: ${losses}`;
+      levelSpan.innerHTML = `Level: ${level}`;
+    }
+
+    // Celebrate win with confetti effect
+    function celebrateWin() {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+    }
+
+    // Handle user's guess
+    function handleGuess() {
+      const userGuess = parseInt(userGuessInput.value);
+
+      // Validate input
+      if (isNaN(userGuess) || userGuess < minNumber || userGuess > maxNumber) {
+        resultDiv.innerHTML = `⚠️ Please enter a valid number between ${minNumber} and ${maxNumber}.`;
+        return;
+      }
+
+      attempts++;
+
+      if (userGuess === secretNumber) {
+        correctSound.play();
+        wins++;
+        celebrateWin();
+        level++; // Level up for a win
+        updateScoreboard();
+        clearInterval(timerInterval);
+        resultDiv.innerHTML = `
+          🎉 Congratulations! You guessed <strong>${secretNumber}</strong> in <strong>${attempts}</strong> attempts.<br>
+          <button class="btn btn-success mt-3" onclick="startNewRound()">Next Round</button>
+        `;
+        disableInput();
+        clueDiv.innerHTML = '';
+      } else {
+        wrongSound.play();
+        // Provide an additional clue: random factor or prime info.
+        const factors = getPossibleFactors(secretNumber);
+        if (factors.length > 0) {
+          const clue = factors[Math.floor(Math.random() * factors.length)];
+          clueDiv.innerHTML = `Hint: A factor of the number is <strong>${clue}</strong>`;
+        } else {
+          clueDiv.innerHTML = `Hint: It's a prime number!`;
+        }
+        
+        resultDiv.innerHTML = userGuess < secretNumber
+          ? '🔻 Too low. Try again.'
+          : '🔺 Too high. Try again.';
+      }
+
+      userGuessInput.value = '';
+      userGuessInput.focus();
+    }
+
+    // Handle hint button click: show clue and reduce timer as a penalty.
+    function handleHint() {
+      // Disable further hint presses in the same round
+      hintButton.disabled = true;
+      
+      const factors = getPossibleFactors(secretNumber);
+      let hintMessage = '';
+      if (factors.length > 0) {
+        const clue = factors[Math.floor(Math.random() * factors.length)];
+        hintMessage = `Hint: One of its factors is <strong>${clue}</strong>`;
+      } else {
+        hintMessage = `Hint: It's a prime number!`;
+      }
+      clueDiv.innerHTML = hintMessage;
+      
+      // Deduct 3 seconds as a cost for using a hint
+      timeLeft = Math.max(0, timeLeft - 3);
+      updateTimerDisplay();
+    }
+
+    // Event Listeners
+    guessButton.addEventListener('click', handleGuess);
+    hintButton.addEventListener('click', handleHint);
+
+    // Start the first round on load
+    startNewRound();
+  </script>
+</body>
+</html>
